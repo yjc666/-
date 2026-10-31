@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>设备与工时管理系统</title>
+  <!-- 引入 SheetJS（Excel 导出）与 Html5-QRCode（原生摄像头扫码） -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #007bff;
+      --success: #28a745;
+      --danger: #dc3545;
+      --warning: #ed8936;
+      --bg: #f5f7fa;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #2d3748;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 40px; }
+
+    /* 顶部导航三栏居中自适应 */
+    .nav-container {
+      position: sticky;
+      top: 0;
+      background: white;
+      padding: 10px 8px;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      z-index: 99;
+    }
+    .tab-btn {
+      flex: 1;
+      max-width: 130px;
+      padding: 8px 6px;
+      border: 1.5px solid var(--primary);
+      background: #fff;
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 20px;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+
+    .container { max-width: 860px; margin: 12px auto; padding: 0 10px; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* 界面1：表单 */
+    .form-card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #4a5568; }
+    .input-row { display: flex; gap: 8px; }
+    input[type="text"], input[type="time"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus { border-color: var(--primary); }
+
+    .btn {
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-scan { background: #4a5568; color: white; }
+    .btn-submit { width: 100%; padding: 14px; font-size: 16px; border-radius: 10px; margin-top: 10px; }
+    .btn-now { background: #edf2f7; color: #2d3748; padding: 4px 8px; font-size: 11px; }
+    .btn-clear { background: #fed7d7; color: #c53030; padding: 4px 6px; font-size: 11px; }
+    .btn-stop { background: var(--danger); color: white; padding: 4px 8px; font-size: 11px; border-radius: 4px; }
+    .btn-stop:disabled { background: #cbd5e0; color: #718096; cursor: not-allowed; }
+
+    /* 界面2：工具栏 */
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .toolbar .btn { padding: 9px 4px; font-size: 12px; border-radius: 8px; }
+
+    .filter-tip-bar {
+      background: #ebf8ff;
+      border: 1px solid #bee3f8;
+      color: #2b6cb0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    /* 界面2 卡片 */
+    .record-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+      border-left: 4px solid var(--primary);
+    }
+    .record-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #edf2f7;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .record-title { font-size: 15px; font-weight: bold; color: #1a202c; }
+    .record-sub { font-size: 11px; color: #718096; margin-top: 2px; }
+
+    .time-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .time-item { background: #f8fafc; padding: 6px 8px; border-radius: 6px; }
+    .time-item span { font-size: 11px; color: #718096; display: block; margin-bottom: 3px; font-weight: 500; }
+    .time-item.full-width { grid-column: span 2; }
+    .time-input-wrap { display: flex; gap: 4px; align-items: center; }
+    .time-input-wrap input { padding: 4px; font-size: 12px; }
+
+    .stat-bar {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      background: #f7fafc;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      border: 1px solid #edf2f7;
+    }
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #edf2f7;
+    }
+    .stat-val { font-weight: bold; color: var(--primary); }
+    .stat-lock { font-size: 11px; color: #a0aec0; }
+
+    /* 界面3（方案 B 标签徽章式） */
+    .board-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 4px solid #4a5568;
+    }
+    .board-left { min-width: 80px; flex-shrink: 0; }
+    .board-name { font-size: 16px; font-weight: bold; color: #1a202c; }
+    .board-tag {
+      font-size: 11px;
+      color: #718096;
+      background: #edf2f7;
+      padding: 1px 5px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 3px;
+    }
+    .board-right-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-work { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+    .badge-machine { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+    .badge-lunch { background: #fffaf0; color: #c05621; border: 1px solid #feebc8; }
+    .badge-off-tag { font-size: 10px; background: #e2e8f0; color: #4a5568; padding: 0 4px; border-radius: 3px; }
+
+    /* 通用弹窗模态框 */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: white;
+      width: 100%;
+      max-width: 450px;
+      border-radius: 14px;
+      padding: 20px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; }
+    .modal-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      margin: 10px 0;
+    }
+    .modal-list label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      font-size: 13px;
+      border-bottom: 1px dashed #edf2f7;
+    }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px; }
+
+    .checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0; }
+    .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 13px; background: #f8fafc; padding: 8px; border-radius: 6px; }
+
+    /* 扫码取景框样式 */
+    #qr-reader {
+      width: 100%;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部居中切换按钮 -->
+  <div class="nav-container">
+    <button class="tab-btn active" onclick="switchTab(1)">📝 登记信息</button>
+    <button class="tab-btn" onclick="switchTab(2)">📋 详细表格</button>
+    <button class="tab-btn" onclick="switchTab(3)">⏱️ 时长看板</button>
+  </div>
+
+  <div class="container">
+    <!-- ================= 界面 1：登记 ================= -->
+    <div id="page1" class="page active">
+      <div class="form-card">
+        <h3 style="margin-bottom: 16px; font-size: 16px;">员工设备领用登记</h3>
+        <div class="form-group">
+          <label>箱子编码</label>
+          <input type="text" id="boxId" placeholder="例如：BOX-01">
+        </div>
+        <div class="form-group">
+          <label>员工姓名</label>
+          <input type="text" id="empName" placeholder="请输入姓名">
+        </div>
+        <div class="form-group">
+          <label>头显编码</label>
+          <div class="input-row">
+            <input type="text" id="vrId" placeholder="请输入或扫码">
+            <button class="btn btn-scan" onclick="startScanner()">📷 扫码</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-submit" onclick="submitForm()">💾 保存并录入下一个人</button>
+      </div>
+    </div>
+
+    <!-- ================= 界面 2：详细表格 ================= -->
+    <div id="page2" class="page">
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="openFilterModal()">🔍 姓名筛选</button>
+        <button class="btn btn-success" onclick="openBatchEditModal()">✏️ 批量修改</button>
+        <button class="btn btn-danger" onclick="openBatchDeleteModal()">🗑️ 批量删除</button>
+        <button class="btn" style="background: #107c41; color: white;" onclick="exportToExcel()">📊 导出Excel</button>
+      </div>
+
+      <div id="filterTipBar" class="filter-tip-bar" style="display: none;">
+        <span id="filterTipText">已筛选显示部分人员</span>
+        <button class="btn btn-clear" onclick="resetFilter()">✕ 取消筛选</button>
+      </div>
+
+      <div id="emptyTip" style="text-align: center; color: #a0aec0; margin-top: 40px; font-size: 14px;">
+        暂无数据，请在“登记信息”界面保存录入。
+      </div>
+
+      <div id="recordList"></div>
+    </div>
+
+    <!-- ================= 界面 3：时长看板 ================= -->
+    <div id="page3" class="page">
+      <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 14px; font-weight: bold; color: #4a5568;">实时工时统计总览</span>
+        <button class="btn btn-primary" style="padding: 6px 12px;" onclick="openBoardFilterModal()">🔍 姓名筛选</button>
+      </div>
+
+      <div id="boardFilterTipBar" class="filter-tip-bar" style="display: none;">
+        <span id="boardFilterTipText">已筛选部分人员</span>
+        <button class="btn btn-clear" onclick="resetBoardFilter()">✕ 取消筛选</button>
+      </div>
+
+      <div id="boardEmptyTip" style="text-align: center; color: #a0aec0; margin-top: 40px; font-size: 14px;">
+        暂无人员工时数据。
+      </div>
+
+      <div id="boardList"></div>
+    </div>
+  </div>
+
+  <!-- ================= 摄像头扫码弹窗 ================= -->
+  <div id="scannerModal" class="modal-overlay">
+    <div class="modal-box" style="text-align: center; max-width: 400px;">
+      <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>📷 扫描设备条形码/二维码</span>
+        <button class="btn btn-clear" style="padding: 2px 6px;" onclick="stopScanner()">✕</button>
+      </div>
+      
+      <!-- 取景区域 -->
+      <div id="qr-reader"></div>
+
+      <div id="scannerErrorTip" style="color: var(--danger); font-size: 12px; margin-top: 8px; text-align: left; display: none;"></div>
+
+      <div style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <label class="btn btn-now" style="cursor: pointer;">
+          📁 从相册选图识别
+          <input type="file" id="qrFileInput" accept="image/*" style="display: none;" onchange="scanFromImage(this)">
+        </label>
+        <button class="btn btn-clear" onclick="stopScanner()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：界面2 批量修改 -->
+  <div id="batchEditModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">✏️ 批量修改时间属性</div>
+      <p style="font-size: 12px; color: #718096;" id="batchEditScopeTip">修改范围：全部卡片</p>
+      
+      <div style="font-size: 13px; font-weight: 600; margin-top: 10px;">步骤一：选择需要批量修改的字段【可多选】</div>
+      <div class="checkbox-grid">
+        <label class="checkbox-item"><input type="checkbox" name="editField" value="arriveTime"> 到岗时间</label>
+        <label class="checkbox-item"><input type="checkbox" name="editField" value="machineTime"> 上机时间</label>
+        <label class="checkbox-item"><input type="checkbox" name="editField" value="lunchStart"> 午休时间</label>
+        <label class="checkbox-item"><input type="checkbox" name="editField" value="lunchEnd"> 下午回来</label>
+        <label class="checkbox-item"><input type="checkbox" name="editField" value="offTime"> 下班时间</label>
+      </div>
+
+      <div style="font-size: 13px; font-weight: 600; margin-top: 10px;">步骤二：输入批量修改的目标时间</div>
+      <div class="input-row" style="margin-top: 6px;">
+        <input type="time" id="batchTimeInput">
+        <button class="btn btn-now" onclick="document.getElementById('batchTimeInput').value = getCurrentTimeStr()">当下时间</button>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-clear" onclick="closeModal('batchEditModal')">取消</button>
+        <button class="btn btn-primary" onclick="confirmBatchEdit()">确认批量覆盖</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：界面2 批量删除 -->
+  <div id="batchDeleteModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🗑️ 批量删除卡片</div>
+      <input type="text" id="deleteSearchInput" placeholder="🔍 输入姓名搜索..." oninput="filterDeleteList()">
+      <div class="modal-list" id="deleteNameList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-clear" onclick="closeModal('batchDeleteModal')">取消</button>
+        <button class="btn btn-danger" onclick="confirmBatchDelete()">确认删除所选</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：界面2 姓名筛选 -->
+  <div id="filterModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🔍 筛选显示表格卡片</div>
+      <input type="text" id="filterSearchInput" placeholder="🔍 输入姓名搜索..." oninput="filterSearchList()">
+      <div class="modal-list" id="filterNameList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-clear" onclick="closeModal('filterModal')">取消</button>
+        <button class="btn btn-primary" onclick="confirmFilter()">确认筛选显示</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：界面3 专属姓名筛选 -->
+  <div id="boardFilterModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🔍 筛选看板人员</div>
+      <input type="text" id="boardFilterSearchInput" placeholder="🔍 输入姓名搜索..." oninput="filterBoardSearchList()">
+      <div class="modal-list" id="boardFilterNameList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-clear" onclick="closeModal('boardFilterModal')">取消</button>
+        <button class="btn btn-primary" onclick="confirmBoardFilter()">确认筛选显示</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let records = [];
+    let currentFilterNames = null; // 界面2筛选
+    let boardFilterNames = null;   // 界面3筛选
+    let html5QrCodeScanner = null; // 扫码实例
+
+    function getCurrentTimeStr() {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function getCurrentFullTimeStr() {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    }
+
+    function getTodayDateStr() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 提示音效果（Web Audio API）
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+      } catch (e) {}
+    }
+
+    // ================= 实装扫码逻辑 =================
+    function startScanner() {
+      const modal = document.getElementById('scannerModal');
+      const errTip = document.getElementById('scannerErrorTip');
+      modal.classList.add('active');
+      errTip.style.display = 'none';
+
+      if (!html5QrCodeScanner) {
+        html5QrCodeScanner = new Html5Qrcode("qr-reader");
+      }
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+      };
+
+      // 优先唤起后置摄像头 (facingMode: environment)
+      html5QrCodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        onScanFailure
+      ).catch(err => {
+        errTip.style.display = 'block';
+        errTip.innerHTML = `⚠️ 启动摄像头失败：请确保在 <strong>HTTPS</strong> 环境下运行并允许摄像头权限。<br>您也可点击下方“从相册选图识别”。`;
+      });
+    }
+
+    function onScanSuccess(decodedText) {
+      playBeep();
+      document.getElementById('vrId').value = decodedText;
+      stopScanner();
+    }
+
+    function onScanFailure(error) {
+      // 扫码中每一帧未识别时不打扰
+    }
+
+    function stopScanner() {
+      if (html5QrCodeScanner && html5QrCodeScanner.isScanning) {
+        html5QrCodeScanner.stop().then(() => {
+          document.getElementById('scannerModal').classList.remove('active');
+        }).catch(() => {
+          document.getElementById('scannerModal').classList.remove('active');
+        });
+      } else {
+        document.getElementById('scannerModal').classList.remove('active');
+      }
+    }
+
+    // 本地相册选图扫码
+    function scanFromImage(input) {
+      if (input.files.length === 0) return;
+      const file = input.files[0];
+      if (!html5QrCodeScanner) {
+        html5QrCodeScanner = new Html5Qrcode("qr-reader");
+      }
+
+      html5QrCodeScanner.scanFile(file, true)
+        .then(decodedText => {
+          playBeep();
+          document.getElementById('vrId').value = decodedText;
+          stopScanner();
+        })
+        .catch(err => {
+          alert("未能识别该图片中的条码/二维码，请确保条码清晰！");
+        });
+    }
+
+    // ================= 页面切换 =================
+    function switchTab(pageNumber) {
+      document.querySelectorAll('.tab-btn').forEach((b, idx) => {
+        b.classList.toggle('active', idx === pageNumber - 1);
+      });
+      document.getElementById('page1').classList.toggle('active', pageNumber === 1);
+      document.getElementById('page2').classList.toggle('active', pageNumber === 2);
+      document.getElementById('page3').classList.toggle('active', pageNumber === 3);
+
+      if (pageNumber === 2) renderRecords();
+      if (pageNumber === 3) renderBoard();
+    }
+
+    // 界面1保存
+    function submitForm() {
+      const boxId = document.getElementById('boxId').value.trim();
+      const empName = document.getElementById('empName').value.trim();
+      const vrId = document.getElementById('vrId').value.trim();
+
+      if (!empName) {
+        alert("请填写员工姓名！");
+        return;
+      }
+
+      const newRecord = {
+        id: Date.now() + Math.random(),
+        boxId: boxId || '-',
+        name: empName,
+        vrId: vrId || '-',
+        saveTime: getCurrentFullTimeStr(),
+        arriveTime: getCurrentTimeStr(),
+        machineTime: '',
+        lunchStart: '',
+        lunchEnd: '',
+        offTime: '',
+        workStoppedTime: null,
+        machineStoppedTime: null
+      };
+
+      records.push(newRecord);
+      renderRecords();
+      renderBoard();
+
+      document.getElementById('boxId').value = '';
+      document.getElementById('empName').value = '';
+      document.getElementById('vrId').value = '';
+
+      alert(`登记成功！[${empName}] 的信息已提交。`);
+    }
+
+    // ================= 时长核心算法（自动扣减午休） =================
+    function diffMinutes(startStr, endStr) {
+      if (!startStr || !endStr) return null;
+      const [sh, sm] = startStr.split(':').map(Number);
+      const [eh, em] = endStr.split(':').map(Number);
+      let diff = (eh * 60 + em) - (sh * 60 + sm);
+      return diff < 0 ? 0 : diff;
+    }
+
+    function formatMinutes(mins) {
+      if (mins === null) return '未记录';
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${h}小时${m}分`;
+    }
+
+    function getLunchDurationMinutes(r) {
+      if (!r.lunchStart || !r.lunchEnd) return 0;
+      const diff = diffMinutes(r.lunchStart, r.lunchEnd);
+      return diff !== null ? diff : 0;
+    }
+
+    function calcLunchDuration(r) {
+      if (!r.lunchStart || !r.lunchEnd) return '未记录';
+      return formatMinutes(diffMinutes(r.lunchStart, r.lunchEnd));
+    }
+
+    function calcWorkDuration(r) {
+      if (!r.arriveTime) return '未到岗';
+      let endTime = r.offTime || r.workStoppedTime || getCurrentTimeStr();
+      let gross = diffMinutes(r.arriveTime, endTime);
+      if (gross === null) return '未到岗';
+      let net = gross - getLunchDurationMinutes(r);
+      return formatMinutes(net < 0 ? 0 : net);
+    }
+
+    function calcMachineDuration(r) {
+      if (!r.machineTime) return '未上机';
+      let endTime = r.offTime || r.machineStoppedTime || getCurrentTimeStr();
+      let gross = diffMinutes(r.machineTime, endTime);
+      if (gross === null) return '未上机';
+      let net = gross - getLunchDurationMinutes(r);
+      return formatMinutes(net < 0 ? 0 : net);
+    }
+
+    function calcDeviceHoldDuration(r) {
+      const saveHourMin = r.saveTime.substring(0, 5);
+      if (r.offTime) {
+        return formatMinutes(diffMinutes(saveHourMin, r.offTime));
+      }
+      return `${formatMinutes(diffMinutes(saveHourMin, getCurrentTimeStr()))} (进行中)`;
+    }
+
+    // ================= 渲染界面 2 =================
+    function renderRecords() {
+      const listEl = document.getElementById('recordList');
+      const emptyTip = document.getElementById('emptyTip');
+      const tipBar = document.getElementById('filterTipBar');
+
+      let displayRecords = records;
+      if (currentFilterNames !== null) {
+        displayRecords = records.filter(r => currentFilterNames.includes(r.name));
+        tipBar.style.display = 'flex';
+        document.getElementById('filterTipText').innerText = `已筛选：${currentFilterNames.join('、')} (${displayRecords.length}项)`;
+      } else {
+        tipBar.style.display = 'none';
+      }
+
+      if (displayRecords.length === 0) {
+        emptyTip.style.display = 'block';
+        listEl.innerHTML = '';
+        return;
+      }
+      emptyTip.style.display = 'none';
+
+      listEl.innerHTML = displayRecords.map((r, index) => {
+        const hasOffTime = Boolean(r.offTime);
+        const workDur = calcWorkDuration(r);
+        const machineDur = calcMachineDuration(r);
+        const lunchDur = calcLunchDuration(r);
+        const deviceDur = calcDeviceHoldDuration(r);
+
+        return `
+          <div class="record-card">
+            <div class="record-header">
+              <div>
+                <div class="record-title">#${index + 1} ${r.name}</div>
+                <div class="record-sub">箱号: ${r.boxId} | 头显: ${r.vrId}</div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 11px; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">🕒 登记: ${r.saveTime}</span>
+              </div>
+            </div>
+
+            <div class="time-grid">
+              <div class="time-item">
+                <span>到岗时间</span>
+                <div class="time-input-wrap">
+                  <input type="time" value="${r.arriveTime}" onchange="updateRecordField(${r.id}, 'arriveTime', this.value)">
+                  <button class="btn btn-now" onclick="setFieldNow(${r.id}, 'arriveTime')">当下</button>
+                </div>
+              </div>
+
+              <div class="time-item">
+                <span>上机时间</span>
+                <div class="time-input-wrap">
+                  <input type="time" value="${r.machineTime}" onchange="updateRecordField(${r.id}, 'machineTime', this.value)">
+                  <button class="btn btn-now" onclick="setFieldNow(${r.id}, 'machineTime')">当下</button>
+                </div>
+              </div>
+
+              <div class="time-item">
+                <span>午休时间</span>
+                <div class="time-input-wrap">
+                  <input type="time" value="${r.lunchStart}" onchange="updateRecordField(${r.id}, 'lunchStart', this.value)">
+                  <button class="btn btn-now" onclick="setFieldNow(${r.id}, 'lunchStart')">当下</button>
+                </div>
+              </div>
+
+              <div class="time-item">
+                <span>下午回来时间</span>
+                <div class="time-input-wrap">
+                  <input type="time" value="${r.lunchEnd}" onchange="updateRecordField(${r.id}, 'lunchEnd', this.value)">
+                  <button class="btn btn-now" onclick="setFieldNow(${r.id}, 'lunchEnd')">当下</button>
+                </div>
+              </div>
+
+              <div class="time-item full-width" style="border-top: 1px dashed var(--border); padding-top: 8px;">
+                <span>下班时间 (填写后上班/上机自动锁定并扣减午休)</span>
+                <div class="time-input-wrap">
+                  <input type="time" value="${r.offTime}" onchange="updateRecordField(${r.id}, 'offTime', this.value)">
+                  <button class="btn btn-now" onclick="setFieldNow(${r.id}, 'offTime')">当下</button>
+                  <button class="btn btn-clear" onclick="updateRecordField(${r.id}, 'offTime', '')">清空</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-bar">
+              <div class="stat-item">
+                <span>午休时长</span>
+                <span class="stat-val">${lunchDur}</span>
+              </div>
+              <div class="stat-item">
+                <span>设备在手</span>
+                <span class="stat-val">${deviceDur}</span>
+              </div>
+              <div class="stat-item">
+                <div>
+                  <span>上班时长 (扣午休)</span>
+                  <div class="stat-val">${workDur}</div>
+                </div>
+                ${hasOffTime 
+                  ? `<span class="stat-lock">🔒 已按下班锁定</span>`
+                  : `<button class="btn btn-stop" ${r.workStoppedTime ? 'disabled' : ''} onclick="stopWorkTimer(${r.id})">${r.workStoppedTime ? '已停止' : '⏹ 停止'}</button>`
+                }
+              </div>
+              <div class="stat-item">
+                <div>
+                  <span>上机时长 (扣午休)</span>
+                  <div class="stat-val">${machineDur}</div>
+                </div>
+                ${hasOffTime 
+                  ? `<span class="stat-lock">🔒 已按下班锁定</span>`
+                  : `<button class="btn btn-stop" ${r.machineStoppedTime ? 'disabled' : ''} onclick="stopMachineTimer(${r.id})">${r.machineStoppedTime ? '已停止' : '⏹ 停止'}</button>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ================= 渲染界面 3（看板） =================
+    function renderBoard() {
+      const listEl = document.getElementById('boardList');
+      const emptyTip = document.getElementById('boardEmptyTip');
+      const tipBar = document.getElementById('boardFilterTipBar');
+
+      let displayRecords = records;
+      if (boardFilterNames !== null) {
+        displayRecords = records.filter(r => boardFilterNames.includes(r.name));
+        tipBar.style.display = 'flex';
+        document.getElementById('boardFilterTipText').innerText = `看板已筛选：${boardFilterNames.join('、')} (${displayRecords.length}人)`;
+      } else {
+        tipBar.style.display = 'none';
+      }
+
+      if (displayRecords.length === 0) {
+        emptyTip.style.display = 'block';
+        listEl.innerHTML = '';
+        return;
+      }
+      emptyTip.style.display = 'none';
+
+      listEl.innerHTML = displayRecords.map(r => {
+        const workDur = calcWorkDuration(r);
+        const machineDur = calcMachineDuration(r);
+        const lunchDur = calcLunchDuration(r);
+        const isOff = Boolean(r.offTime);
+
+        return `
+          <div class="board-card">
+            <div class="board-left">
+              <div class="board-name">${r.name}</div>
+              <div class="board-tag">${r.vrId !== '-' ? r.vrId : r.boxId}</div>
+            </div>
+
+            <div class="board-right-badges">
+              <span class="badge badge-work">
+                💼 上班: ${workDur}
+                ${isOff ? '<span class="badge-off-tag">已下班</span>' : ''}
+              </span>
+              <span class="badge badge-machine">
+                🎮 上机: ${machineDur}
+              </span>
+              <span class="badge badge-lunch">
+                ☕ 午休: ${lunchDur}
+              </span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateRecordField(id, field, value) {
+      const rec = records.find(item => item.id === id);
+      if (rec) {
+        rec[field] = value;
+        renderRecords();
+        renderBoard();
+      }
+    }
+
+    function setFieldNow(id, field) {
+      updateRecordField(id, field, getCurrentTimeStr());
+    }
+
+    function stopWorkTimer(id) {
+      const rec = records.find(item => item.id === id);
+      if (rec && !rec.offTime && !rec.workStoppedTime) {
+        rec.workStoppedTime = getCurrentTimeStr();
+        renderRecords();
+        renderBoard();
+      }
+    }
+
+    function stopMachineTimer(id) {
+      const rec = records.find(item => item.id === id);
+      if (rec && !rec.offTime && !rec.machineStoppedTime) {
+        rec.machineStoppedTime = getCurrentTimeStr();
+        renderRecords();
+        renderBoard();
+      }
+    }
+
+    // ================= 批量修改（隔离未筛选） =================
+    function openBatchEditModal() {
+      if (records.length === 0) return alert("暂无数据！");
+      const isFiltered = currentFilterNames !== null;
+      document.getElementById('batchEditScopeTip').innerHTML = isFiltered 
+        ? `<strong style="color:var(--danger)">注意：当前筛选仅针对选中的 [${currentFilterNames.join('、')}] 生效，未筛选卡片不受影响！</strong>`
+        : `修改范围：当前全部 ${records.length} 张卡片`;
+      
+      document.getElementById('batchTimeInput').value = '';
+      document.querySelectorAll('input[name="editField"]').forEach(c => c.checked = false);
+      document.getElementById('batchEditModal').classList.add('active');
+    }
+
+    function confirmBatchEdit() {
+      const checkedBoxes = document.querySelectorAll('input[name="editField"]:checked');
+      const selectedFields = Array.from(checkedBoxes).map(c => c.value);
+      const targetTime = document.getElementById('batchTimeInput').value;
+
+      if (selectedFields.length === 0) return alert("请至少勾选一个修改字段！");
+      if (!targetTime) return alert("请输入或选择时间！");
+
+      let count = 0;
+      records.forEach(r => {
+        if (currentFilterNames === null || currentFilterNames.includes(r.name)) {
+          selectedFields.forEach(field => { r[field] = targetTime; });
+          count++;
+        }
+      });
+
+      closeModal('batchEditModal');
+      renderRecords();
+      renderBoard();
+      alert(`已成功批量覆盖 ${count} 位员工的相关字段时间！`);
+    }
+
+    // ================= 批量删除 =================
+    function openBatchDeleteModal() {
+      if (records.length === 0) return alert("暂无数据！");
+      document.getElementById('deleteSearchInput').value = '';
+      renderDeleteCheckboxList();
+      document.getElementById('batchDeleteModal').classList.add('active');
+    }
+
+    function renderDeleteCheckboxList(keyword = '') {
+      const container = document.getElementById('deleteNameList');
+      const uniqueNames = [...new Set(records.map(r => r.name))];
+      const filtered = uniqueNames.filter(n => n.includes(keyword));
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="font-size:12px; color:#a0aec0; padding:10px;">未匹配到姓名</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(name => `
+        <label>
+          <input type="checkbox" name="deleteNameItem" value="${name}">
+          <span>${name}</span>
+        </label>
+      `).join('');
+    }
+
+    function filterDeleteList() {
+      renderDeleteCheckboxList(document.getElementById('deleteSearchInput').value.trim());
+    }
+
+    function confirmBatchDelete() {
+      const checked = document.querySelectorAll('input[name="deleteNameItem"]:checked');
+      const namesToDelete = Array.from(checked).map(c => c.value);
+      if (namesToDelete.length === 0) return alert("请勾选要删除的姓名！");
+
+      if (confirm(`确定要永久删除 [${namesToDelete.join('、')}] 的所有记录吗？`)) {
+        records = records.filter(r => !namesToDelete.includes(r.name));
+        if (currentFilterNames) {
+          currentFilterNames = currentFilterNames.filter(n => !namesToDelete.includes(n));
+          if (currentFilterNames.length === 0) currentFilterNames = null;
+        }
+        if (boardFilterNames) {
+          boardFilterNames = boardFilterNames.filter(n => !namesToDelete.includes(n));
+          if (boardFilterNames.length === 0) boardFilterNames = null;
+        }
+        closeModal('batchDeleteModal');
+        renderRecords();
+        renderBoard();
+      }
+    }
+
+    // ================= 筛选管理 =================
+    function openFilterModal() {
+      if (records.length === 0) return alert("暂无数据！");
+      document.getElementById('filterSearchInput').value = '';
+      renderFilterCheckboxList();
+      document.getElementById('filterModal').classList.add('active');
+    }
+
+    function renderFilterCheckboxList(keyword = '') {
+      const container = document.getElementById('filterNameList');
+      const uniqueNames = [...new Set(records.map(r => r.name))];
+      const filtered = uniqueNames.filter(n => n.includes(keyword));
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="font-size:12px; color:#a0aec0; padding:10px;">未匹配到姓名</div>';
+        return;
+      }
+      container.innerHTML = filtered.map(name => `
+        <label>
+          <input type="checkbox" name="filterNameItem" value="${name}" ${currentFilterNames && currentFilterNames.includes(name) ? 'checked' : ''}>
+          <span>${name}</span>
+        </label>
+      `).join('');
+    }
+
+    function filterSearchList() {
+      renderFilterCheckboxList(document.getElementById('filterSearchInput').value.trim());
+    }
+
+    function confirmFilter() {
+      const checked = document.querySelectorAll('input[name="filterNameItem"]:checked');
+      const selected = Array.from(checked).map(c => c.value);
+      if (selected.length === 0) return alert("请至少勾选一位人员！");
+      currentFilterNames = selected;
+      closeModal('filterModal');
+      renderRecords();
+    }
+
+    function resetFilter() {
+      currentFilterNames = null;
+      renderRecords();
+    }
+
+    // 界面3 专属筛选
+    function openBoardFilterModal() {
+      if (records.length === 0) return alert("暂无看板数据！");
+      document.getElementById('boardFilterSearchInput').value = '';
+      renderBoardFilterCheckboxList();
+      document.getElementById('boardFilterModal').classList.add('active');
+    }
+
+    function renderBoardFilterCheckboxList(keyword = '') {
+      const container = document.getElementById('boardFilterNameList');
+      const uniqueNames = [...new Set(records.map(r => r.name))];
+      const filtered = uniqueNames.filter(n => n.includes(keyword));
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="font-size:12px; color:#a0aec0; padding:10px;">未匹配到姓名</div>';
+        return;
+      }
+      container.innerHTML = filtered.map(name => `
+        <label>
+          <input type="checkbox" name="boardFilterNameItem" value="${name}" ${boardFilterNames && boardFilterNames.includes(name) ? 'checked' : ''}>
+          <span>${name}</span>
+        </label>
+      `).join('');
+    }
+
+    function filterBoardSearchList() {
+      renderBoardFilterCheckboxList(document.getElementById('boardFilterSearchInput').value.trim());
+    }
+
+    function confirmBoardFilter() {
+      const checked = document.querySelectorAll('input[name="boardFilterNameItem"]:checked');
+      const selected = Array.from(checked).map(c => c.value);
+      if (selected.length === 0) return alert("请至少勾选一位看板人员！");
+      boardFilterNames = selected;
+      closeModal('boardFilterModal');
+      renderBoard();
+    }
+
+    function resetBoardFilter() {
+      boardFilterNames = null;
+      renderBoard();
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // ================= 导出 Excel =================
+    function exportToExcel() {
+      if (records.length === 0) return alert("暂无表格数据可供导出！");
+
+      const headers = [
+        "箱子编码", "姓名", "头显编码", "登记保存时间", 
+        "到岗时间", "上机时间", "午休时间", "下午回来时间", "下班时间", 
+        "午休时长", "上班时长(扣午休)", "上机时长(扣午休)", "设备在手时长"
+      ];
+
+      const exportList = currentFilterNames !== null 
+        ? records.filter(r => currentFilterNames.includes(r.name))
+        : records;
+
+      const rows = exportList.map(r => [
+        r.boxId,
+        r.name,
+        r.vrId,
+        r.saveTime,
+        r.arriveTime || '-',
+        r.machineTime || '-',
+        r.lunchStart || '-',
+        r.lunchEnd || '-',
+        r.offTime || '-',
+        calcLunchDuration(r),
+        calcWorkDuration(r),
+        calcMachineDuration(r),
+        calcDeviceHoldDuration(r)
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = [
+        { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
+        { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
+        { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      const todayDate = getTodayDateStr();
+
+      XLSX.utils.book_append_sheet(wb, ws, todayDate);
+      XLSX.writeFile(wb, `设备与工时统计表_${todayDate}.xlsx`);
+    }
+
+    // 30秒定时自动刷新
+    setInterval(() => {
+      if (document.getElementById('page2').classList.contains('active')) renderRecords();
+      if (document.getElementById('page3').classList.contains('active')) renderBoard();
+    }, 30000);
+  </script>
+</body>
+</html>
